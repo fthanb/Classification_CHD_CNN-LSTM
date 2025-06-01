@@ -41,3 +41,41 @@ To extract the dataset files:
 * **Conclusion of Preprocessed Dataset:**
     * Total folders (patients): 72
     * Total image files (data): 19800
+
+## CNN Basic (`cnn.ipynb`)
+
+First try is a basic Convolutional Neural Network for classifying individual CT scan slices
+
+* **Data Handling:**
+    * The dataset path (`root_dir`) is set to `C:\Users\risuser\Documents\RISET_FATHAN\dataset`, which is expected to contain `ct_<patient_id>` folders with the preprocessed 275 PNG image slices.
+    * **Patient-level splitting:** Patients are first divided into train 80%, validation 10%, and test sets 10% based on specific counts (Normal: 16/2/2; Sianotik: 20/3/3; Non-Sianotik: 20/3/3). This ensures that all slices from a given patient are contained within a single split (e.g., if patient 1003 is in the training set, all 275 of their slices will only be used for training).
+    * A custom `CTScanDataset` loads individual PNG images, associating each with its patient's pre-assigned label (Sianotik: 0, Non-Sianotik: 1, Normal: 2).
+    * **Image Augmentation:** A `transforms.Compose` pipeline is applied to the training images, including `transforms.Resize((128, 128))`, `transforms.RandomHorizontalFlip(p=0.5)`, `transforms.RandomRotation(degrees=15)`, and `transforms.ColorJitter(brightness=0.1, contrast=0.1)`. These augmentations introduce variability to the training data, helping the model generalize better.
+    * **Normalization:** Images are converted to tensors and normalized to a range of [-1, 1] using `transforms.Normalize((0.5,), (0.5,))`.
+    * `DataLoader`s are set up with a `batch_size` of 32 for training, validation, and testing.
+
+* **Model Architecture (`EnhancedCNN`):**
+    * **Input Layer:** Accepts individual grayscale PNG image slices of size 128x128 pixels (after resizing transform). The input shape to the model is typically $(Batch\_size, 1, 128, 128)$.
+    * **Convolutional Blocks (`self.conv_layers`):** The model uses three sequential blocks for feature extraction.
+        * **Block 1:** `nn.Conv2d(1, 16, kernel_size=3, padding=1)`, followed by `nn.BatchNorm2d(16)`, `nn.ReLU()`, `nn.MaxPool2d(2, 2)`, and `nn.Dropout(0.3)`.
+        * **Block 2:** `nn.Conv2d(16, 32, kernel_size=3, padding=1)`, followed by `nn.BatchNorm2d(32)`, `nn.ReLU()`, `nn.MaxPool2d(2, 2)`, and `nn.Dropout(0.4)`.
+        * **Block 3:** `nn.Conv2d(32, 64, kernel_size=3, padding=1)`, followed by `nn.BatchNorm2d(64)`, `nn.ReLU()`, `nn.MaxPool2d(2, 2)`, and `nn.Dropout(0.5)`.
+    * **Flattening:** The 3D output of the last convolutional/pooling layer (which is $64 \times 16 \times 16$) is flattened into a 1D vector.
+    * **Fully Connected Layers (`self.fc_layers`):** These layers perform the final classification.
+        * `nn.Linear(64 * 16 * 16, 256)`
+        * `nn.Dropout(0.6)`
+        * `nn.ReLU()`
+        * `nn.Linear(256, 128)`
+        * `nn.Dropout(0.5)`
+        * `nn.ReLU()`
+        * `nn.Linear(128, 3)` (for 3 output classes).
+    * **Forward Pass (`forward` method):** The input `x` is passed sequentially through `self.conv_layers`, then flattened, and finally passed through `self.fc_layers`.
+
+* **Training and Evaluation:**
+    * **Loss Function:** `nn.CrossEntropyLoss` is used, with `weight` calculated based on inverse class frequencies in the training set to address class imbalance.
+    * **Optimizer:** `torch.optim.AdamW` is used with a learning rate of `0.00005` and `weight_decay` of `1e-4`.
+    * **Scheduler:** `optim.lr_scheduler.ReduceLROnPlateau` monitors the validation loss (`mode='min'`) and reduces the learning rate by a `factor=0.3` if no improvement is seen for `patience=3` epochs.
+    * **Epochs:** The model is trained for 50 epochs.
+    * **Model Saving:** The model's state dictionary is saved as `best_model.pth` whenever a new `best_val_loss` is achieved during training.
+    * **Performance Tracking:** Training and validation loss and accuracy are recorded per epoch.
+    * **Evaluation:** and **Test Accuracy:** are showned in the code.
