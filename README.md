@@ -79,3 +79,41 @@ First try is a basic Convolutional Neural Network for classifying individual CT 
     * **Model Saving:** The model's state dictionary is saved as `best_model.pth` whenever a new `best_val_loss` is achieved during training.
     * **Performance Tracking:** Training and validation loss and accuracy are recorded per epoch.
     * **Evaluation:** and **Test Accuracy:** are showned in the code.
+
+## CNN+LSTM with K-fold Cross Validation (`cnnlstm_kfold.ipynb`)
+
+This section details the CNN-LSTM model implemented with K-Fold Cross-Validation, more robust technique for model evaluation.
+
+* **Data Handling:**
+    * The `dataset_dir` is set to `D:\coding\SKRIPSI\CLASSIFICATION MODEL\dataset`, which is expected to contain `ct_<patient_id>` folders with the preprocessed 275 PNG frames.
+    * **Patient-level splitting with Stratified K-Fold:** The project uses `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)` to divide the 72 patient IDs into 5 folds. This ensures that the proportion of each class (Sianotik, Non-Sianotik, Normal) is maintained across all training and validation folds.
+    * A `CT3DDataset` (identical to the one in `cnnlstm.ipynb`) loads all 275 frames for each patient as a volume. Each frame is converted to a tensor (implicitly normalizing to [0,1]).
+    * `DataLoader`s are set up with a `batch_size` of 1 for both training and validation within each fold.
+
+* **Model Architecture (`CNN_LSTM`):**
+    * The `CNN_LSTM` class used here is **structurally almost identical** to the one in `cnnlstm.ipynb`.
+    * **Key Addition:** It explicitly includes a `nn.Dropout(0.5)` layer applied *before the LSTM input*. This is a regularization technique designed to prevent overfitting by randomly setting a fraction of input units to zero during training.
+    * Other components (CNN layers, LSTM configuration, `feature_dim`, `fc` layer) remain the same.
+
+* **Training and Evaluation:**
+    * **K-Fold Loop:** The entire training and validation process is wrapped in a loop that iterates through each of the 5 folds. In each fold:
+        * A new instance of the `CNN_LSTM` model is initialized.
+        * **Loss Function:** `nn.CrossEntropyLoss()`.
+        * **Optimizer:** `torch.optim.Adam` with a learning rate of `1e-4`.
+        * **Epochs:** Each fold is trained for 20 epochs.
+        * **Model Saving:** The model's state dictionary is saved for each fold (e.g., `cnn_lstm_fold1.pth`, `cnn_lstm_fold2.pth`, etc.).
+        * **Performance Tracking:** Training and validation loss and accuracy are recorded per epoch for each fold and plotted.
+        * **Evaluation (per fold):** After training for a fold, the model is evaluated on that fold's validation set (`val_loader`). A confusion matrix is generated and displayed for each fold's validation performance.
+
+* **Analysis of Results:**
+    The results for the CNN-LSTM K-Fold Cross-Validation model are presented for each of the 5 folds directly within the notebook's output. **You can see the results shown in the code**, including printed epoch-wise training and validation accuracies and losses, as well as plotted loss/accuracy curves and confusion matrices for each fold.
+
+    Upon reviewing the results:
+    * **Training Accuracy:** For most folds, the training accuracy quickly reaches 1.0000 (100%), often within the first few epochs. This indicates that the model is very effective at learning the patterns in the training data, but also raises a flag for potential overfitting given the small batch size (1 patient per batch) and relatively small dataset.
+    * **Validation Accuracy:** The validation accuracy is significantly lower and shows considerable variability across the folds:
+        * Fold 1: 0.4000
+        * Fold 2: 0.4000
+        * Fold 3: 0.4286
+        * Fold 4: 0.3571
+        * Fold 5: 0.7143
+  * This variability, particularly the much higher accuracy in Fold 5, suggests that the model's performance is sensitive to the specific patients included in the validation set. The relatively low average validation accuracy (around 40-50%) indicates that the model might struggle to generalize well to unseen patient data, especially given the rapid 100% training accuracy. The confusion matrices for each fold provide a detailed breakdown of correct and incorrect classifications per class. 
