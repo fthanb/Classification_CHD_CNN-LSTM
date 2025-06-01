@@ -1,0 +1,12 @@
+# requirements.txt
+# Python version: 3.11
+
+nibabel
+numpy
+Pillow
+shutil
+tqdm
+scikit-learn
+matplotlib
+torch==2.5.1
+torchvision==0.20.1
